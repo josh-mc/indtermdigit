@@ -1,0 +1,210 @@
+---
+title: "Power Simulations"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+devtools::load_all()
+library(tidyverse)
+```
+
+#Normal 
+
+```{r}
+
+sizes <- c(20, 60, 100, 200)
+dup <- c(0, 0.05, 0.1, 0.2)
+stan <- c(1, 2, 5)
+decimals <- c(1, 2)
+reps <- 2000
+times <- 2000
+
+seed <- 5304
+
+n_all <- data.frame()
+
+counter <- 0
+
+set.seed(seed)
+
+bench::system_time(
+  
+  for(si in sizes)  {
+  
+  for(s in stan)  {
+
+  for(i in dup)  {
+    
+  for(dec in decimals) {
+  
+    counter <- 1 + counter
+    
+    x <- perm_basic(distribution = 1, 
+                     duplicates = si * i,
+                     set_n = si - si * i, 
+                     set_mean = 100, 
+                     set_sd = s, 
+                     decimals = dec, 
+                     reps = reps,
+                     times = times,
+                     tolerance = 0) 
+  
+    x <- x %>%
+      summarise(across(everything(.), ~mean(.x <= 0.05))) 
+      
+    n_all <- bind_rows(n_all, x) 
+    
+    n_all$number[counter] <- si
+    n_all$duplicates[counter] <- i
+    n_all$parameter[counter] <- s
+    n_all$reps[counter] <- reps 
+    n_all$times[counter] <- times
+    n_all$seed[counter] <- seed
+    n_all$decimals[counter] <- dec
+    n_all$distribution[counter] <- "normal"
+    
+    print(counter)
+
+  }
+  }
+    
+  }
+  }
+)
+
+saveRDS(n_all, "data/n_all.RDS")
+```
+
+#Exponential
+
+```{r}
+sizes <- c(20, 60, 100, 200)
+dup <- c(0, 0.05, 0.1, 0.2)
+rate <- c(1, 0.5, 0.25)
+reps <- 2000
+times <- 2000
+decimals <- c(1, 2)
+seed <- 3218
+
+e_all <- data.frame()
+
+counter <- 0
+
+set.seed(seed)
+
+bench::system_time(
+  
+  for(si in sizes)  {
+  
+  for(r in rate)  {
+
+  for(i in dup)  {
+    
+  for(dec in decimals) {
+  
+    counter <- 1 + counter
+    
+    x <- perm_basic(distribution = 3, 
+                    duplicates = si * i,
+                    set_n = si - si * i, #So we have the right total number
+                    set_mean = r, 
+                    set_sd = 2, 
+                    decimals = dec,
+                    reps = reps, 
+                    times = times,
+                    tolerance = 0) 
+
+    x <- x %>%
+      summarise(across(everything(.), ~mean(.x <= 0.05))) 
+      
+  
+    e_all <- bind_rows(e_all, x) 
+    
+    e_all$number[counter] <- si
+    e_all$duplicates[counter] <- si * i
+    e_all$parameter[counter] <- r
+    e_all$reps[counter] <- reps
+    e_all$times[counter] <- times
+    e_all$seed[counter] <- seed
+    e_all$decimals[counter] <- dec
+    
+    print(counter)
+
+  }
+  }
+  }
+}
+
+)
+
+saveRDS(e_all, "data/e_all.RDS")
+```
+
+
+
+# Uniform 
+
+```{r}
+sizes <- c(20, 60, 100, 200)
+dup <- c(0, 0.05, 0.1, 0.2)
+rate <- c(5, 10, 20)
+decimals <- c(1, 2)
+times <- 2000
+reps <- 2000
+seed <- 3218
+
+u_all <- data.frame()
+
+counter <- 0
+
+set.seed(seed)
+
+bench::system_time(
+  
+  for(si in sizes)  {
+  
+  for(r in rate)  {
+
+  for(i in dup)  {
+    
+  for(dec in decimals) {
+  
+    counter <- 1 + counter
+    
+    x <- perm_basic(distribution = 2, 
+                     duplicates = si * i,
+                     set_n = si - si * i, 
+                     set_mean = 0, 
+                     set_sd = r, 
+                     decimals = dec, 
+                reps = reps, 
+                times = times,
+                tolerance = 0) 
+
+    x <- x %>%
+      summarise(across(everything(.), ~mean(.x <= 0.05))) 
+      
+  
+    u_all <- bind_rows(u_all, x) 
+    
+    u_all$number[counter] <- si
+    u_all$duplicates[counter] <- i
+    u_all$parameter[counter] <- r
+    u_all$reps[counter] <- reps
+    u_all$times[counter] <- times
+    u_all$decimals[counter] <- dec 
+    u_all$seed[counter] <- seed 
+    u_all$distribution[counter] <- "uniform"
+    
+    print(counter)
+
+  }
+  }
+  }
+  }
+
+)
+
+saveRDS(u_all, "data/u_all.RDS")
+```
+

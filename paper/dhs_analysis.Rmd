@@ -1,0 +1,272 @@
+---
+title: "DHS"
+output: html_document
+---
+
+This script conducts all analysis for DHS data sets and produces the two tables (tables 3 and 4) based on the DHS data sets as well as the one figure (fig. 5)
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+devtools::load_all()
+
+library(tidyverse)
+library(haven)
+library(gt)
+#As noted in the readme, these two files must be requested from the DHS program.
+
+dhs_6 <- read_dta("NGKR6AFL.dta")
+dhs_7 <- read_sav("NGKR7AFL.SAV")
+
+
+```
+
+```{r}
+#Dropping high weights used to record missings
+
+dhs_6 <- dhs_6 %>%
+  filter(hw2 < 8000,
+         !is.na(hw2)) %>%
+  mutate(decimal = str_sub(hw2, start = -1), 
+         weight = hw2 * 0.1) %>%
+  add_count(v028) %>%
+  filter(n > 20) 
+
+dhs_tests <- dhs_6 %>%
+  select(v028, n) %>%
+  distinct() %>%
+  rename(enum = v028)
+
+count <- 1
+
+#Running tests for independence and uniformity of terminal digits per enumerator.
+
+set.seed(499)
+
+for(i in dhs_tests$enum) {
+  
+  dat <- dhs_6 %>%
+    filter(v028 == i) 
+  
+  x <- perm_do(dat$weight, 
+        decimals = 1,
+        reps = 10000,
+        tolerance = 0)
+  
+  y <- table(dat$decimal)
+  
+  z <- chisq.test(y, simulate.p.value = TRUE, B = 2000)$p.value
+  
+  dhs_tests$enumerator[count] <- i
+  dhs_tests$independent[count] <- x$d_g2_p
+  dhs_tests$uniform[count] <- z
+  
+  count <- count + 1
+}
+
+dhs_tests$independent_fdr <- p.adjust(dhs_tests$independent, method = "BH")
+dhs_tests$uniform_fdr <- p.adjust(dhs_tests$uniform, method = "BH")
+
+dhs_tests <- dhs_tests %>%
+  select(-enum)
+
+saveRDS(dhs_tests, "data/dhs_tests_2013.RDS")
+```
+
+# Type I errors baesd on 2013 distribution 
+
+```{r}
+
+set.seed(499)
+
+bench::system_time( 
+  y <- perm_basic(distribution = 1, 
+             duplicates = 0,
+             set_n = 435, 
+             set_mean = 100, 
+             set_sd = 3.8, 
+             decimals = 1, 
+             reps = 2000,
+             times = 2000,
+             tolerance = 0) 
+)
+
+yy <- y %>%
+  summarise(across(everything(.), ~mean(.x <= 0.05))) 
+
+```
+
+# Table 3
+
+```{r}
+
+dhs_tests %>%
+  filter(independent < 0.05) %>%
+  select(enumerator, n, independent, independent_fdr, uniform, uniform_fdr) %>%
+  arrange(independent) %>%
+  mutate(independent = round(independent, digits = 3),
+         independent = ifelse(independent == 0, "<0.000", independent),
+         uniform = round(uniform, digits = 3),
+         uniform = ifelse(uniform == 0, "<0.000", uniform)) %>% 
+  gt() %>%
+  tab_header(
+    title = "Terminal digit tests"
+  ) %>%
+  fmt_number(
+    columns = c(4 ,6),
+  decimals = 3
+  ) %>%
+  cols_label(
+    enumerator = "Enumerator",
+    independent = "P-value",
+    independent_fdr = "Adjusted p-value",
+    uniform = "P-value",
+    uniform_fdr = "Adjusted p-value") %>%
+  tab_spanner(label = "G2 Test of independence",
+              columns = 3:4) %>%
+   tab_spanner(label = "X2 Test of uniformity",
+              columns = 5:6) %>%
+  cols_align(
+  align = "center",
+  columns = everything()
+) %>%
+  gtsave("figures_tables/McCormick_Table_3.rtf")
+
+```
+
+# Figure 5
+
+```{r}
+fig_5 <- dhs_6 %>%
+  ggplot(aes(weight)) +
+  geom_histogram(bins = 50, 
+                 aes(y = ..density..)) +
+  stat_function(fun = dnorm,
+                args = list(mean = 10.6,
+                            sd = 3.8),
+                col = "#1b98e0",
+                size = 1) +
+  ylab(NULL) +
+  xlab("Kilos") +
+  labs(title = "Weights for children 0 - 5 yrs. (2013 DHS)") +
+  theme_minimal() +
+   theme(plot.title = element_text(hjust = 0.5),
+      legend.title = element_blank())
+
+
+
+fig_5
+
+ggsave(filename = "figures_tables/McCormick_Figure_5.pdf", 
+       plot = fig_5, 
+       dpi = 800,
+       height = 5,
+       width = 7.5,
+       units = "in")
+
+```
+
+
+#DHS Round 2018
+
+```{r}
+#Dropping high weights used to record missings
+
+dhs_7 <- dhs_7 %>%
+  filter(HW2 < 8000,
+         !is.na(HW2)) %>%
+  mutate(decimal = str_sub(HW2, start = -1), 
+         weight = HW2 * 0.1) %>%
+  add_count(V028) %>%
+  filter(n > 20) 
+
+dhs_tests_7 <- dhs_7 %>%
+  select(V028, n) %>%
+  distinct() %>%
+  rename(enum = V028)
+
+count <- 1
+
+#Running tests for independence and uniformity of terminal digits per enumerator.
+
+set.seed(499)
+
+for(i in dhs_tests_7$enum) {
+  
+  dat <- dhs_7 %>%
+    filter(V028 == i) 
+  
+  x <- perm_do(dat$weight, 
+        decimals = 1,
+        reps = 10000,
+        tolerance = 0)
+  
+  y <- table(dat$decimal)
+  
+  z <- chisq.test(y, simulate.p.value = TRUE, B = 2000)$p.value
+  
+  dhs_tests_7$enumerator[count] <- i
+  dhs_tests_7$independent[count] <- x$d_g2_p
+  dhs_tests_7$uniform[count] <- z
+  
+  count <- count + 1
+}
+
+dhs_tests_7$independent_fdr <- p.adjust(dhs_tests_7$independent, method = "BH")
+
+dhs_tests_7$uniform_fdr <- p.adjust(dhs_tests_7$uniform, method = "BH")
+
+dhs_tests_7 <- dhs_tests_7 %>%
+  select(-enum)
+
+
+saveRDS(dhs_tests_7, "data/dhs_tests_2018.RDS")
+```
+
+# Table 4 for combined results
+
+```{r}
+dhs_tests_7 <- dhs_tests_7 %>%
+  mutate(Year = 2018)
+
+dhs_tests <- dhs_tests %>%
+  mutate(Year = 2013)
+
+combined <- bind_rows(dhs_tests, dhs_tests_7)
+
+combined <- combined %>% 
+  mutate(independent_sig = ifelse(independent < 0.05, 1, 0),
+         independent_fdr_sig = ifelse(independent_fdr < 0.05, 1, 0),
+         uniform_sig = ifelse(uniform < 0.05, 1, 0),
+         uniform_fdr_sig = ifelse(uniform_fdr < 0.05, 1, 0))
+
+x <- combined %>%
+  group_by(Year) %>%
+  summarize(ind = sum(independent_sig),
+            ind_adj = sum(independent_fdr_sig),
+            uni = sum(uniform_sig),
+            uni_adj = sum(uniform_fdr_sig)) %>%
+  gt() %>%
+  tab_header(
+    title = "Summary of terminal digit tests"
+  ) %>%
+  cols_label(
+    ind = "Enumerators with significant results",
+    ind_adj = "Enumerators with significant results (adjusted)",
+    uni = "Enumerators with significant results",
+    uni_adj = "Enumerators with significant results (adjusted)") %>%
+  tab_spanner(label = "G2 Test of independence",
+              columns = 2:3) %>%
+   tab_spanner(label = "X2 Test of uniformity",
+              columns = 4:5) %>%
+  cols_align(
+  align = "center",
+  columns = everything()
+) %>%
+  gtsave("figures_tables/McCormick_Table_4.rtf")
+```
+
+
+
+
+
